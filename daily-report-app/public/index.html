@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>일일 업무 보고서 - 자동 실행 대시보드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --paper:#EAEFEA; --card:#F8F9F5; --ink:#16241F; --ink-soft:#4B5A52;
+    --line:#C7CFC5; --accent:#A6502E; --accent-soft:#F0DFD5;
+    --teal:#3E6259; --teal-soft:#DCE7E2; --danger:#A6302E; --ok:#2F6B3E; --ok-soft:#DEEAE0;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'IBM Plex Sans KR',sans-serif;line-height:1.6;}
+  .wrap{max-width:820px;margin:0 auto;padding:40px 24px 80px;}
+  header{margin-bottom:28px;border-bottom:1px solid var(--line);padding-bottom:24px;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--teal);margin:0 0 8px;}
+  h1{font-family:'Fraunces',serif;font-weight:500;font-size:32px;margin:0 0 10px;letter-spacing:-0.01em;}
+  header p{color:var(--ink-soft);font-size:15px;margin:0;max-width:60ch;}
+
+  .status-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    background:var(--card); border:1px solid var(--line); border-radius:6px; padding:16px 20px; margin-bottom:20px;
+  }
+  .status-item{display:flex; flex-direction:column; gap:2px;}
+  .status-label{font-size:12px; color:var(--ink-soft);}
+  .status-value{font-family:'IBM Plex Mono',monospace; font-size:14px;}
+  .run-btn{
+    background:var(--accent); color:#fff; border:none; padding:11px 20px; font-size:14px;
+    font-weight:500; border-radius:4px; cursor:pointer; font-family:inherit;
+  }
+  .run-btn:hover:not(:disabled){background:#8C4326;}
+  .run-btn:disabled{opacity:0.55; cursor:not-allowed;}
+
+  .badge{display:inline-block; font-size:11px; padding:2px 8px; border-radius:3px; font-family:'IBM Plex Mono',monospace;}
+  .badge.ok{background:var(--ok-soft); color:var(--ok);}
+  .badge.err{background:#FBEAE8; color:var(--danger);}
+  .badge.idle{background:var(--teal-soft); color:var(--teal);}
+
+  .loading{margin:16px 0; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--teal);}
+  .error-box{margin:16px 0; padding:12px 14px; background:#FBEAE8; border:1px solid var(--danger); border-radius:4px; color:var(--danger); font-size:13px;}
+
+  .sources-summary{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px;}
+  @media (max-width:700px){.sources-summary{grid-template-columns:1fr;}}
+  .source-mini{background:var(--card); border:1px solid var(--line); border-radius:6px; padding:14px;}
+  .source-tag{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--teal); background:var(--teal-soft); display:inline-block; padding:3px 8px; border-radius:3px; margin-bottom:8px;}
+  .source-mini pre{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft); white-space:pre-wrap; margin:0; max-height:100px; overflow-y:auto;}
+  .filter-note{font-size:11px; color:var(--ink-soft); margin-top:8px;}
+
+  .report{background:var(--card); border:1px solid var(--line); border-radius:6px; overflow:hidden;}
+  .report-header{padding:18px 22px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;}
+  .report-header h2{font-family:'Fraunces',serif; font-size:20px; font-weight:500; margin:0;}
+  .report-meta{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);}
+  .section{padding:20px 22px; border-bottom:1px solid var(--line);}
+  .section:last-child{border-bottom:none;}
+  .section-title{display:flex; align-items:baseline; gap:10px; margin-bottom:10px;}
+  .section-num{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--accent); background:var(--accent-soft); width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .section-title h3{font-size:15px; font-weight:600; margin:0;}
+  .section p{font-size:14.5px; margin:0 0 0 32px; white-space:pre-wrap;}
+  .action-grid{display:grid; grid-template-columns:1fr; gap:18px; margin-left:32px;}
+  .action-item{padding:0;}
+  .action-label{display:block; font-size:14px; font-weight:600; color:var(--ink); margin-bottom:4px;}
+  .action-desc{font-size:12.5px; color:var(--ink-soft); margin-bottom:9px;}
+  .analysis-box{background:#F1F2EF; border:1px solid #D8DDD6; border-radius:12px; padding:14px 16px;}
+  .analysis-box p{font-family:'IBM Plex Mono',monospace; font-size:12.5px; line-height:1.75; margin:0; white-space:pre-wrap;}
+  .next-step-box{background:#fff; border-radius:7px;}
+  .tracking-grid{display:grid; gap:16px;}
+  .tracking-title{font-size:15px; font-weight:600; margin:0 0 6px;}
+  .tracking-note{font-size:12px; color:var(--ink-soft); margin-bottom:10px;}
+  .repeat-item{background:#FBEAE8; border-left:3px solid var(--danger); padding:11px 13px; border-radius:5px; margin-top:8px;}
+  .repeat-item p,.progress-item p{margin:5px 0 0; font-size:13px;}
+  .repeat-days{font-size:12px; font-weight:600; color:var(--danger);}
+  .progress-heading{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .progress-rate{font-family:'IBM Plex Mono',monospace; font-size:22px; color:var(--teal);}
+  .progress-track{height:8px; background:var(--teal-soft); border-radius:8px; overflow:hidden; margin:8px 0 10px;}
+  .progress-fill{height:100%; background:var(--teal);}
+  .progress-item{padding:10px 0; border-top:1px solid var(--line);}
+  .progress-item .evidence{font-size:12px; color:var(--ink-soft);}
+  .tracking-empty{font-size:13px; color:var(--ink-soft);}
+  @media (max-width:700px){.action-grid{margin-left:0;}.analysis-box{border-radius:9px;}}
+
+  .empty{padding:40px 22px; text-align:center; color:var(--ink-soft); font-size:14px;}
+  .setup-note{font-size:12px; color:var(--ink-soft); margin-top:20px; padding:14px 16px; background:var(--card); border:1px solid var(--line); border-radius:6px;}
+  .setup-note code{font-family:'IBM Plex Mono',monospace; background:#fff; padding:1px 5px; border-radius:3px;}
+
+  .panel{background:var(--card); border:1px solid var(--line); border-radius:6px; margin-top:24px;}
+  .panel-header{padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; justify-content:space-between; gap:8px; flex-wrap:wrap;}
+  .panel-header h2{font-family:'Fraunces',serif; font-size:18px; font-weight:500; margin:0;}
+  .panel-sub{font-size:12px; color:var(--ink-soft);}
+  .chart-wrap{padding:18px 20px; position:relative; height:220px;}
+  .legend{display:flex; gap:14px; padding:0 20px 16px; flex-wrap:wrap;}
+  .legend-item{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft);}
+  .legend-dot{width:9px; height:9px; border-radius:2px; display:inline-block;}
+
+  .history-list{display:flex; flex-direction:column;}
+  .history-row{padding:14px 20px; border-top:1px solid var(--line); cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+  .history-row:hover{background:#fff;}
+  .history-left{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .history-date{font-family:'IBM Plex Mono',monospace; font-size:13px;}
+  .history-counts{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);}
+  .history-detail{padding:0 20px 18px; border-top:1px solid var(--line); display:none;}
+  .history-detail.open{display:block;}
+  .history-detail .section{padding:14px 0; border-bottom:1px solid var(--line);}
+  .history-detail .section:last-child{border-bottom:none;}
+  .chev{font-family:'IBM Plex Mono',monospace; color:var(--ink-soft); font-size:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">AI 솔버톤 · 트랙 B 프로토타입 · 완전 자동 실행 버전</p>
+    <h1>일일 업무 보고서 대시보드</h1>
+    <p>토큰은 서버에 한 번만 설정해두면, 정해진 시간에 GitHub · Notion · Slack을 자동으로 훑어 보고서를 만들고 Slack 채널에 자동 게시합니다.</p>
+  </header>
+
+  <div class="status-bar">
+    <div class="status-item">
+      <span class="status-label">자동 실행 스케줄</span>
+      <span class="status-value" id="schedule-value">불러오는 중...</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">마지막 실행</span>
+      <span class="status-value" id="last-run-value">-</span>
+    </div>
+    <button class="run-btn" id="run-now-btn">지금 바로 실행</button>
+  </div>
+
+  <div id="loading-container"></div>
+  <div id="error-container"></div>
+  <div id="sources-container"></div>
+  <div id="report-container"></div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <h2>수집 추이</h2>
+      <span class="panel-sub" id="chart-sub">최근 실행 기준</span>
+    </div>
+    <div class="chart-wrap"><canvas id="trend-chart"></canvas></div>
+    <div class="legend">
+      <span class="legend-item"><span class="legend-dot" style="background:#3E6259"></span>GitHub</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#A6502E"></span>Notion</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#8C8F5E"></span>Slack</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <h2>실행 이력</h2>
+      <span class="panel-sub" id="history-sub">-</span>
+    </div>
+    <div class="history-list" id="history-list"></div>
+  </div>
+
+  <div class="setup-note">
+    토큰이 아직 설정되지 않았다면 <code>.env</code> 파일에 <code>GITHUB_TOKEN</code>, <code>NOTION_TOKEN</code>, <code>SLACK_BOT_TOKEN</code>, <code>SLACK_CHANNEL</code>을 입력한 뒤 서버를 재시작하세요. 기본 자동 실행 시간은 평일 오후 6시이며, <code>REPORT_SCHEDULE</code> 환경변수로 변경할 수 있습니다.
+  </div>
+</div>
+
+<script>
+const sectionMeta = [
+  { key: 'tasks', title: '수행 업무' },
+  { key: 'results', title: '주요 결과' },
+  { key: 'issues', title: '이슈 및 문제점' }
+];
+
+function getActionGuide(report){
+  return report.actionGuide || {
+    topPriority: '확인된 내용 없음',
+    hiddenRisks: '확인된 내용 없음',
+    nextSteps: report.nextPlans || '확인된 내용 없음'
+  };
+}
+
+function renderTracking(tracking){
+  if(!tracking) return '';
+  const repeats = Array.isArray(tracking.repeatIssues) ? tracking.repeatIssues : [];
+  const progress = tracking.previousPlanProgress || {};
+  const rate = Math.max(0, Math.min(100, Number(progress.rate) || 0));
+  const statusLabels = {completed:'완료', partial:'부분 진행', not_started:'미착수', uncertain:'확인 불가'};
+  const repeatHtml = repeats.length
+    ? repeats.map(item => `<div class="repeat-item"><span class="repeat-days">${Number(item.consecutiveDays) || 2}일째 미해결</span><p>[${escapeHtml(item.source)}] ${escapeHtml(item.issue)}</p></div>`).join('')
+    : '<div class="tracking-empty">2일 이상 연속된 미해결 이슈 없음</div>';
+  const progressHtml = progress.hasPreviousPlan
+    ? `<div class="progress-heading"><h3 class="tracking-title">어제 계획 대비 진행률</h3><span class="progress-rate">${rate}%</span></div>
+       <div class="tracking-note">비교 기준: ${escapeHtml(progress.previousDate)} 보고서 · 완료 100%, 부분 진행 50% 반영 · 확인 불가는 0% 반영(미완료 확정 아님)</div>
+       <div class="progress-track" role="progressbar" aria-label="어제 계획 대비 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rate}"><div class="progress-fill" style="width:${rate}%"></div></div>
+       <div class="tracking-note">${escapeHtml(progress.summary)}</div>
+       ${(progress.comparisons || []).map(item => `<div class="progress-item"><span class="badge ${item.status === 'completed' ? 'ok' : 'idle'}">${statusLabels[item.status] || '확인 불가'}</span><p>${escapeHtml(item.plan)}</p><p class="evidence">근거: ${escapeHtml(item.evidence)}</p></div>`).join('')}`
+    : '<h3 class="tracking-title">어제 계획 대비 진행률</h3><div class="tracking-empty">비교할 전일 계획이 없습니다.</div>';
+  return `<div class="section tracking-grid"><div><h3 class="tracking-title">반복 이슈 탐지</h3><div class="tracking-note">날짜별 최신 보고서를 비교합니다. 일수는 연속 보고일 기준입니다.</div>${repeatHtml}</div><div>${progressHtml}</div></div>`;
+}
+
+function renderReportSections(report){
+  const standardSections = sectionMeta.map((meta, i) => `
+    <div class="section">
+      <div class="section-title">
+        <span class="section-num">${i+1}</span>
+        <h3>${meta.title}</h3>
+      </div>
+      <p>${escapeHtml(report[meta.key] || '특이사항 없음')}</p>
+    </div>`).join('');
+  const guide = getActionGuide(report);
+  return `${standardSections}${renderTracking(report.tracking)}
+    <div class="section">
+      <div class="section-title">
+        <span class="section-num">4</span>
+        <h3>실행 제안</h3>
+      </div>
+      <div class="action-grid">
+        <div class="action-item">
+          <span class="action-label">최우선 처리</span>
+          <div class="action-desc">현재 업무에 가장 큰 영향을 주거나 즉시 확인해야 할 행동 하나를 AI가 제시합니다.</div>
+          <div class="analysis-box"><p>${escapeHtml(guide.topPriority)}</p></div>
+        </div>
+        <div class="action-item">
+          <span class="action-label">놓치기 쉬운 리스크</span>
+          <div class="action-desc">현재 드러난 장애보다 향후 문제가 될 수 있는 누락·의존성·회귀 가능성을 AI가 표시합니다.</div>
+          <div class="analysis-box"><p>${escapeHtml(guide.hiddenRisks)}</p></div>
+        </div>
+        <div class="action-item">
+          <span class="action-label">다음 단계 제안</span>
+          <div class="action-desc">일반적인 다음 계획이 아니라, 위의 우선 과제와 리스크를 해소하기 위해 지금 바로 할 행동 하나입니다.</div>
+          <div class="analysis-box next-step-box"><p>${escapeHtml(guide.nextSteps)}</p></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function fmtTime(iso){
+  if(!iso) return '-';
+  const d = new Date(iso);
+  return d.toLocaleString('ko-KR');
+}
+
+async function loadSchedule(){
+  try{
+    const res = await fetch('/api/schedule');
+    const data = await res.json();
+    document.getElementById('schedule-value').textContent = `${data.schedule} (${data.timezone})`;
+  }catch{
+    document.getElementById('schedule-value').textContent = '조회 실패';
+  }
+}
+
+function renderEntry(entry){
+  const sourcesContainer = document.getElementById('sources-container');
+  const reportContainer = document.getElementById('report-container');
+  const errorContainer = document.getElementById('error-container');
+
+  errorContainer.innerHTML = '';
+  sourcesContainer.innerHTML = '';
+  reportContainer.innerHTML = '';
+
+  if(!entry || entry.empty){
+    reportContainer.innerHTML = '<div class="report"><div class="empty">아직 실행된 기록이 없습니다. "지금 바로 실행"을 눌러 첫 보고서를 생성해보세요.</div></div>';
+    document.getElementById('last-run-value').textContent = '없음';
+    return;
+  }
+
+  document.getElementById('last-run-value').innerHTML =
+    fmtTime(entry.ranAt) + ' ' +
+    `<span class="badge ${entry.error ? 'err' : 'ok'}">${entry.trigger === 'manual' ? '수동' : '자동'}</span>`;
+
+  if(entry.error){
+    errorContainer.innerHTML = `<div class="error-box">실행 중 오류가 발생했습니다: ${entry.error}</div>`;
+    return;
+  }
+
+  const src = entry.sources || {};
+  const gh = src.github || {}, nt = src.notion || {}, sl = src.slack || {};
+  sourcesContainer.innerHTML = `
+    <div class="sources-summary">
+    <div class="source-mini"><span class="source-tag">GH · ${gh.count ?? 0}건</span><pre>${escapeHtml(gh.text || '')}</pre>${gh.filter ? `<div class="filter-note">업무 승인 라벨만 반영 · 제외 이슈 ${Number(gh.filter.excludedIssues) || 0}건 / 커밋 ${Number(gh.filter.excludedCommits) || 0}건</div>` : ''}</div>
+      <div class="source-mini"><span class="source-tag">NT · ${nt.count ?? 0}건</span><pre>${escapeHtml(nt.text || '')}</pre></div>
+      <div class="source-mini"><span class="source-tag">SL · ${sl.count ?? 0}건</span><pre>${escapeHtml(sl.text || '')}</pre></div>
+    </div>`;
+
+  const sectionsHtml = renderReportSections(entry.report);
+
+  const slackBadge = entry.slackPosted
+    ? '<span class="badge ok">Slack 게시 완료</span>'
+    : `<span class="badge err">Slack 게시 안됨${entry.slackError ? ' · ' + escapeHtml(entry.slackError) : ''}</span>`;
+
+  reportContainer.innerHTML = `
+    <div class="report">
+      <div class="report-header">
+        <h2>일일 업무 보고서</h2>
+        <span class="report-meta">${entry.dateStr} · ${entry.typeLabel} · ${slackBadge}</span>
+      </div>
+      ${sectionsHtml}
+    </div>`;
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function loadLastReport(){
+  try{
+    const res = await fetch('/api/last-report');
+    const data = await res.json();
+    renderEntry(data);
+  }catch(err){
+    document.getElementById('error-container').innerHTML = `<div class="error-box">마지막 보고서를 불러오지 못했습니다: ${err.message}</div>`;
+  }
+}
+
+let trendChart = null;
+
+function fmtShortDate(iso){
+  const d = new Date(iso);
+  return (d.getMonth()+1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+function renderChart(history){
+  const ok = history.filter(h => !h.error).slice(0, 10).reverse();
+  const ctx = document.getElementById('trend-chart');
+
+  if(!ok.length){
+    document.getElementById('chart-sub').textContent = '표시할 데이터가 없습니다';
+    return;
+  }
+  document.getElementById('chart-sub').textContent = `최근 ${ok.length}회 실행`;
+  if(typeof Chart === 'undefined'){
+    document.getElementById('chart-sub').textContent = '차트 라이브러리를 불러오지 못했습니다';
+    return;
+  }
+
+  const labels = ok.map(h => fmtShortDate(h.ranAt));
+  const ghData = ok.map(h => h.sources?.github?.count ?? 0);
+  const ntData = ok.map(h => h.sources?.notion?.count ?? 0);
+  const slData = ok.map(h => h.sources?.slack?.count ?? 0);
+
+  if(trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'GitHub', data: ghData, backgroundColor: '#3E6259' },
+        { label: 'Notion', data: ntData, backgroundColor: '#A6502E' },
+        { label: 'Slack', data: slData, backgroundColor: '#8C8F5E' }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { stacked: true, ticks: { font: { family: 'IBM Plex Mono', size: 10 } }, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { precision: 0, font: { size: 10 } }, grid: { color: '#DDE3DB' } }
+      }
+    }
+  });
+}
+
+function renderHistoryList(history){
+  const list = document.getElementById('history-list');
+  document.getElementById('history-sub').textContent = `총 ${history.length}건 (최근 30건까지 보관)`;
+
+  if(!history.length){
+    list.innerHTML = '<div class="empty">아직 실행 이력이 없습니다.</div>';
+    return;
+  }
+
+  list.innerHTML = history.map((h, i) => {
+    const badge = h.error
+      ? '<span class="badge err">실패</span>'
+      : `<span class="badge ${h.trigger === 'manual' ? 'idle' : 'ok'}">${h.trigger === 'manual' ? '수동' : '자동'}</span>`;
+    const counts = h.error ? '' :
+      `<span class="history-counts">GH ${h.sources?.github?.count ?? 0} · NT ${h.sources?.notion?.count ?? 0} · SL ${h.sources?.slack?.count ?? 0}</span>`;
+
+    return `
+      <div class="history-row" data-idx="${i}">
+        <div class="history-left">
+          <span class="history-date">${fmtTime(h.ranAt)}</span>
+          ${badge}
+          ${counts}
+        </div>
+        <span class="chev" id="chev-${i}">펼치기</span>
+      </div>
+      <div class="history-detail" id="detail-${i}"></div>`;
+  }).join('');
+
+  history.forEach((h, i) => {
+    document.querySelector(`.history-row[data-idx="${i}"]`).addEventListener('click', () => {
+      const detail = document.getElementById(`detail-${i}`);
+      const chev = document.getElementById(`chev-${i}`);
+      const isOpen = detail.classList.contains('open');
+
+      if(isOpen){
+        detail.classList.remove('open');
+        chev.textContent = '펼치기';
+        return;
+      }
+
+      if(h.error){
+        detail.innerHTML = `<div class="error-box">${escapeHtml(h.error)}</div>`;
+      } else {
+        detail.innerHTML = renderReportSections(h.report);
+      }
+      detail.classList.add('open');
+      chev.textContent = '접기';
+    });
+  });
+}
+
+async function loadHistory(){
+  try{
+    const res = await fetch('/api/history');
+    const history = await res.json();
+    renderChart(history);
+    renderHistoryList(history);
+  }catch(err){
+    document.getElementById('history-sub').textContent = '이력을 불러오지 못했습니다';
+  }
+}
+
+document.getElementById('run-now-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('run-now-btn');
+  const loadingContainer = document.getElementById('loading-container');
+  btn.disabled = true;
+  loadingContainer.innerHTML = '<div class="loading">// GitHub · Notion · Slack에서 오늘의 기록을 수집하고 보고서를 생성하는 중...</div>';
+
+  try{
+    const res = await fetch('/api/run-now', { method: 'POST' });
+    const entry = await res.json();
+    if(!res.ok){
+      throw new Error(entry.error || `HTTP ${res.status}`);
+    }
+    renderEntry(entry);
+    await loadHistory();
+  }catch(err){
+    document.getElementById('error-container').innerHTML = `<div class="error-box">실행 실패: ${err.message}</div>`;
+  }finally{
+    loadingContainer.innerHTML = '';
+    btn.disabled = false;
+  }
+});
+
+loadSchedule();
+loadLastReport();
+loadHistory();
+</script>
+</body>
+</html>

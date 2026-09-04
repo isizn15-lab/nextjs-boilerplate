@@ -1,0 +1,21 @@
+{
+  "name": "daily-report-app",
+  "version": "1.0.0",
+  "description": "GitHub/Notion/Slack 업무 기록을 자동 수집해 OpenAI로 일일 보고서를 생성하는 프로토타입",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check:github": "node scripts/check-github-connection.js",
+    "test": "node --test",
+    "check:tracking": "node scripts/check-report-tracking.js"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.8.0",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "node-cron": "^4.6.0"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}
